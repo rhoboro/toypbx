@@ -82,6 +82,7 @@ class RegisterMessage(RequestMessage):
         domain: str,
         username: str,
         password: str = "",
+        expire: int = 300,
     ) -> Self:
         request = RegisterMessage(
             start_line=RequestStartLine(
@@ -104,7 +105,7 @@ class RegisterMessage(RequestMessage):
                 Contact=Contact(
                     display_name=username, value=f"sip:{username}@192.168.0.137:60956;ob"
                 ),
-                Expires=Expires(value=300),
+                Expires=Expires(value=expire),
                 Content_Length=ContentLength(value=0),
                 Via="SIP/2.0/UDP 192.168.0.137:60956;rport;branch=z9hG4bKPjhRHw98trjD05PopYbBL6bj34Hci6DmTU",
                 Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
