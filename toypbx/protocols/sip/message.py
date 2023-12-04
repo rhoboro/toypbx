@@ -83,7 +83,37 @@ class RegisterMessage(RequestMessage):
         username: str,
         password: str = "",
         expire: int = 300,
+        call_id: str | None = None,
+        c_seq: int | None = None,
+        local_tag: str | None = None,
+        remote_tag: str | None = None,
+        branch: str | None = None,
     ) -> Self:
+        if call_id:
+            call_id_ = CallID(call_id)
+        else:
+            call_id_ = CallID()
+
+        if c_seq:
+            c_seq_ = CSeq(method=ClientMethod.REGISTER, value=c_seq)
+        else:
+            c_seq_ = CSeq(method=ClientMethod.REGISTER)
+
+        if local_tag:
+            from_ = From(display_name=username, value=f"sip:{username}@{domain}", tag=local_tag)
+        else:
+            from_ = From(display_name=username, value=f"sip:{username}@{domain}")
+
+        if remote_tag:
+            to_ = To(display_name=username, value=f"sip:{username}@{domain}", tag=remote_tag)
+        else:
+            to_ = To(display_name=username, value=f"sip:{username}@{domain}")
+
+        if branch:
+            via_ = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=branch)
+        else:
+            via_ = Via("SIP/2.0/UDP 192.168.0.137:60956")
+
         request = RegisterMessage(
             start_line=RequestStartLine(
                 method=ClientMethod.REGISTER,
@@ -91,23 +121,16 @@ class RegisterMessage(RequestMessage):
             ),
             headers=Headers(
                 Max_Forwards=MaxForward(value=70),
-                From=From(
-                    display_name=username,
-                    value=f"sip:{username}@{domain}",
-                    tag="JRUu-hLceE3P8h2r0RVQKeJRZuviCTLX",
-                ),
-                To=To(
-                    display_name=username,
-                    value=f"sip:{username}@{domain}",
-                ),
-                Call_ID=CallID(value="6eCTpQmxGa4gAWjUXhufRd-u0D9u.N5F"),
-                CSeq=CSeq(method=ClientMethod.REGISTER, value=46544),
+                From=from_,
+                To=to_,
+                Call_ID=call_id_,
+                CSeq=c_seq_,
                 Contact=Contact(
                     display_name=username, value=f"sip:{username}@192.168.0.137:60956;ob"
                 ),
                 Expires=Expires(value=expire),
                 Content_Length=ContentLength(value=0),
-                Via="SIP/2.0/UDP 192.168.0.137:60956;rport;branch=z9hG4bKPjhRHw98trjD05PopYbBL6bj34Hci6DmTU",
+                Via=via_,
                 Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
             ),
             body=[],

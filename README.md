@@ -10,3 +10,8 @@ $ E2E=true DOMAIN=un100 USER_NAME=6001 PASSWORD=unsecurepassword python3 -m unit
 # The expire is 60 sec. If the register remains, re-test is failed.
 $ E2E=true DOMAIN=un100 USER_NAME=6001 PASSWORD=unsecurepassword python3 -m unittest toypbx.tests.test_client.TestE2E.test_register_digest
 ```
+
+```bash
+# REGISTER -> sleep -> UNREGISTER
+$ python3 -m toypbx client register --password unsecurepassword
+```

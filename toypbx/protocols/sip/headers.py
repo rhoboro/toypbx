@@ -74,8 +74,8 @@ class ContentLength(Header):
 
 @dataclass(frozen=True)
 class From(Header):
-    tag: str
     value: str
+    tag: str = field(default_factory=lambda: str(uuid.uuid4()))
     display_name: str | None = None
     name: str = "From"
     lower_name: str = "from"
@@ -104,15 +104,20 @@ class From(Header):
 @dataclass(frozen=True)
 class To(Header):
     value: str
+    tag: str = ""
     display_name: str | None = None
     name: str = "To"
     lower_name: str = "to"
 
     def __str__(self) -> str:
         if self.display_name:
-            return f'"{self.display_name}" <{self.value}>'
+            v = f'"{self.display_name}" <{self.value}>'
         else:
-            return f"<{self.value}>"
+            v = f"<{self.value}>"
+        if self.tag:
+            return f"{v};tag={self.tag}"
+        else:
+            return v
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
@@ -121,10 +126,14 @@ class To(Header):
             display_name = raw_display_name.replace("'", "").replace('"', "")
         else:
             display_name = None
-        value = raw
+        if ";" in raw:
+            value, tag = raw.split(";", 1)
+        else:
+            value, tag = raw, None
         return cls(
             display_name=display_name,
             value=value.replace("<", "").replace(">", ""),
+            tag=tag.replace("tag=", "") if tag else None,
         )
 
 
@@ -194,15 +203,30 @@ class CSeq(Header):
 @dataclass(frozen=True)
 class Via(Header):
     value: str
+    branch: str = field(default_factory=lambda: "z9hG4bK" + uuid.uuid4().hex)
+    rport: str | None = None
     name: str = "Via"
     lower_name: str = "via"
 
     def __str__(self) -> str:
-        return f"{self.value}"
+        if self.rport:
+            return f"{self.value};rport={self.rport};branch={self.branch}"
+        else:
+            return f"{self.value};rport;branch={self.branch}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
-        return cls(value=raw)
+        branch = ""
+        rport = None
+        for p in raw.split(";"):
+            if p.startswith("branch="):
+                _, branch = p.split("=", 1)
+            if p.startswith("rport="):
+                _, rport = p.split("=", 1)
+        if not branch.startswith("z9hG4bK"):
+            raise ValueError("branch must starts with z9hG4bKPj")
+        value = raw.split(";")[0]
+        return cls(value=value, rport=rport, branch=branch)
 
 
 @dataclass(frozen=True)
