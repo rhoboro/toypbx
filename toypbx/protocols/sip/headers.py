@@ -100,6 +100,10 @@ class From(Header):
             tag=tag.replace("tag=", ""),
         )
 
+    @classmethod
+    def gen_tag(cls) -> str:
+        return str(uuid.uuid4())
+
 
 @dataclass(frozen=True)
 class To(Header):
@@ -177,6 +181,10 @@ class CallID(Header):
     def parse(cls, raw, name: str | None = None) -> Self:
         return cls(value=raw)
 
+    @classmethod
+    def gen_call_id(cls) -> str:
+        return str(uuid.uuid4())
+
 
 @dataclass(frozen=True)
 class CSeq(Header):
@@ -198,6 +206,10 @@ class CSeq(Header):
     def parse(cls, raw, name: str | None = None) -> Self:
         value, method = raw.split(" ")
         return cls(value=int(value), method=ClientMethod[method])
+
+    @classmethod
+    def gen_c_seq(cls) -> int:
+        return randint(1, 2 ^ 31 - 1)
 
 
 @dataclass(frozen=True)
@@ -227,6 +239,10 @@ class Via(Header):
             raise ValueError("branch must starts with z9hG4bKPj")
         value = raw.split(";")[0]
         return cls(value=value, rport=rport, branch=branch)
+
+    @classmethod
+    def gen_branch(cls) -> str:
+        return "z9hG4bK" + uuid.uuid4().hex
 
 
 @dataclass(frozen=True)

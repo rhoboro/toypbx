@@ -11,12 +11,18 @@ class TestE2E(unittest.TestCase):
         domain = os.getenv("DOMAIN")
         username = os.getenv("USER_NAME")
 
-        actual = Client().register(
+        client = Client(
             domain=domain,
             username=username,
             password="",
-            expire=0,
         )
+        with client.register(expire=0):
+            pass
+
+        # REGISTER(401)
+        assert len(client.context.response_messages) == 1
+        actual = client.context.response_messages[0]
+
         branch = actual.headers["Via"].branch
         call_id = actual.headers["Call-ID"].value
         local_tag = actual.headers["From"].tag
@@ -50,12 +56,17 @@ Content-Length:  0"""
         password = os.getenv("PASSWORD", "")
         expire = 60
 
-        actual = Client().register(
+        client = Client(
             domain=domain,
             username=username,
             password=password,
-            expire=expire,
         )
+        with client.register(expire):
+            pass
+
+        # REGISTER(401), REGISTER(200), UNREGISTER(401), UNREGISTER(200)
+        assert len(client.context.response_messages) == 4
+        actual = client.context.response_messages[1]
         branch = actual.headers["Via"].branch
         call_id = actual.headers["Call-ID"].value
         local_tag = actual.headers["From"].tag

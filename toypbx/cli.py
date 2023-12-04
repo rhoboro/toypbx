@@ -1,37 +1,28 @@
 import argparse
 import time
-from pprint import pprint
 
 from toypbx.client import Client
 
 
 def register(domain: str, username: str, password: str, expire: int, **kwargs) -> None:
-    client = Client()
-    response = client.register(
-        domain=domain,
-        username=username,
-        password=password,
-        expire=expire,
-    )
-    pprint(response)
-
-    time.sleep(2)
-
-    response = client.unregister(
+    client = Client(
         domain=domain,
         username=username,
         password=password,
     )
-    pprint(response)
+    with client.register(expire=expire):
+        time.sleep(expire - 1)
 
 
-def unregister(domain: str, username: str, password: str, expire: int, **kwargs) -> None:
-    response = Client().unregister(
+def invite(domain: str, username: str, password: str, expire: int, **kwargs) -> None:
+    client = Client(
         domain=domain,
         username=username,
         password=password,
     )
-    pprint(response)
+    with client.register(expire=expire):
+        with client.invite() as dialog:
+            time.sleep(expire - 1)
 
 
 def command_server(*args, **kwargs):
@@ -72,43 +63,37 @@ def main():
     register_parser.add_argument(
         "--expire",
         type=int,
-        default=60,
+        default=5,
     )
 
-    # UNREGISTER
-    unregister_parser = client_subparsers.add_parser("unregister")
-    unregister_parser.set_defaults(handler=unregister)
-    unregister_parser.add_argument(
+    # INVITE
+    invite_parser = client_subparsers.add_parser("invite")
+    invite_parser.set_defaults(handler=invite)
+    invite_parser.add_argument(
         "--domain",
         type=str,
         default="un100",
     )
-    unregister_parser.add_argument(
+    invite_parser.add_argument(
         "--username",
         type=str,
         default="6001",
     )
-    unregister_parser.add_argument(
+    invite_parser.add_argument(
         "--password",
         type=str,
         default="",
     )
-    unregister_parser.add_argument(
+    invite_parser.add_argument(
         "--expire",
         type=int,
-        default=60,
+        default=5,
     )
 
     # SERVER
     server_parser = subparsers.add_parser("server")
     server_parser.set_defaults(handler=command_server)
 
-    # parser.add_argument(
-    #     "--domain",
-    #     type=str,
-    #     default="un100",
-    #     help="スペース区切りのリスト",
-    # )
     known, unknown = parser.parse_known_args()
     if handler := getattr(known, "handler", None):
         handler(**vars(known))
