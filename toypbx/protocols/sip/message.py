@@ -20,25 +20,6 @@ class ResponseStartLine:
 
 
 @dataclass()
-class RequestMessage:
-    start_line: RequestStartLine
-    headers: Headers
-    body: list[str]
-
-    def to_message(self) -> str:
-        lines = [
-            f"{self.start_line.method} {self.start_line.request_uri} {self.start_line.sip_version}"
-        ]
-        for value in self.headers.values():
-            lines.append(f"{value.name}: {value}")
-
-        lines.append("")
-        for body_line in self.body:
-            lines.append(body_line)
-        return "\n".join(lines)
-
-
-@dataclass()
 class ResponseMessage:
     start_line: ResponseStartLine
     headers: Headers
@@ -67,6 +48,35 @@ class ResponseMessage:
             body=[],
         )
 
+    @property
+    def method(self) -> ClientMethod | None:
+        try:
+            return self.headers["CSeq"].method
+        except KeyError:
+            return None
+
+
+@dataclass()
+class RequestMessage:
+    start_line: RequestStartLine
+    headers: Headers
+    body: list[str]
+
+    def to_message(self) -> str:
+        lines = [
+            f"{self.start_line.method} {self.start_line.request_uri} {self.start_line.sip_version}"
+        ]
+        for value in self.headers.values():
+            lines.append(f"{value.name}: {value}")
+
+        lines.append("")
+        for body_line in self.body:
+            lines.append(body_line)
+        return "\n".join(lines)
+
+    def digest(self, response: ResponseMessage) -> Self | None:
+        return None
+
 
 @dataclass()
 class RegisterMessage(RequestMessage):
@@ -82,7 +92,7 @@ class RegisterMessage(RequestMessage):
         domain: str,
         username: str,
         password: str = "",
-        expire: int = 300,
+        expires: int = 300,
         call_id: str | None = None,
         c_seq: int | None = None,
         local_tag: str | None = None,
@@ -95,19 +105,23 @@ class RegisterMessage(RequestMessage):
             call_id_ = CallID()
 
         if c_seq:
-            c_seq_ = CSeq(method=ClientMethod.REGISTER, value=c_seq)
+            c_seq_ = CSeq(method=ClientMethod.REGISTER, c_seq=c_seq)
         else:
             c_seq_ = CSeq(method=ClientMethod.REGISTER)
 
         if local_tag:
-            from_ = From(display_name=username, value=f"sip:{username}@{domain}", tag=local_tag)
+            from_ = From(
+                display_name=username, from_=f"sip:{username}@{domain}", tag=local_tag
+            )
         else:
-            from_ = From(display_name=username, value=f"sip:{username}@{domain}")
+            from_ = From(display_name=username, from_=f"sip:{username}@{domain}")
 
         if remote_tag:
-            to_ = To(display_name=username, value=f"sip:{username}@{domain}", tag=remote_tag)
+            to_ = To(
+                display_name=username, to=f"sip:{username}@{domain}", tag=remote_tag
+            )
         else:
-            to_ = To(display_name=username, value=f"sip:{username}@{domain}")
+            to_ = To(display_name=username, to=f"sip:{username}@{domain}")
 
         if branch:
             via_ = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=branch)
@@ -120,16 +134,17 @@ class RegisterMessage(RequestMessage):
                 request_uri=f"sip:{domain}",
             ),
             headers=Headers(
-                Max_Forwards=MaxForward(value=70),
+                Max_Forwards=MaxForward(max_forward=70),
                 From=from_,
                 To=to_,
                 Call_ID=call_id_,
                 CSeq=c_seq_,
                 Contact=Contact(
-                    display_name=username, value=f"sip:{username}@192.168.0.137:60956;ob"
+                    display_name=username,
+                    contact=f"sip:{username}@192.168.0.137:60956;ob",
                 ),
-                Expires=Expires(value=expire),
-                Content_Length=ContentLength(value=0),
+                Expires=Expires(expires=expires),
+                Content_Length=ContentLength(content_length=0),
                 Via=via_,
                 Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
             ),
@@ -139,8 +154,10 @@ class RegisterMessage(RequestMessage):
         )
         return request
 
-    def digest(self, response: ResponseMessage) -> RequestMessage:
-        www_authenticate = cast(WWWAuthenticate, response.headers.pop(WWWAuthenticate.name))
+    def digest(self, response: ResponseMessage) -> RequestMessage | None:
+        www_authenticate = cast(
+            WWWAuthenticate, response.headers.pop(WWWAuthenticate.name)
+        )
 
         headers = Headers(**self.headers)
         headers[CSeq.name] = cast(CSeq, headers[CSeq.name]).next()

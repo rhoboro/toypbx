@@ -17,16 +17,24 @@ class Context:
 
     def add_request(self, request: RequestMessage) -> None:
         self.local_tag = request.headers["From"].tag
-        self.local_c_seq = request.headers["CSeq"].value
+        self.local_c_seq = request.headers["CSeq"].c_seq
         self.request_messages.append(request)
 
     def add_response(self, response: ResponseMessage) -> None:
         self.remote_tag = response.headers["To"].tag
         self.branch = response.headers["Via"].branch
-        self.call_id = response.headers["Call-ID"].value
-        self.remote_c_seq = response.headers["CSeq"].value
+        self.call_id = response.headers["Call-ID"].call_id
+        self.remote_c_seq = response.headers["CSeq"].c_seq
         self.response_messages.append(response)
 
     @property
     def next_local_c_seq(self) -> int:
         return self.local_c_seq + 1
+
+    @property
+    def last_request(self) -> RequestMessage | None:
+        return self.request_messages[-1] if self.request_messages else None
+
+    @property
+    def last_response(self) -> ResponseMessage | None:
+        return self.response_messages[-1] if self.response_messages else None

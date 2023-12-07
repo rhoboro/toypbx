@@ -23,7 +23,7 @@ $ python3 -m toypbx client register --password unsecurepassword
 from toypbx.client import Client
 
 client = Client(domain=..., username=..., password=...)
-with client.register(expire=60):  # REGISTER
+with client.register(expires=60):  # REGISTER
     with client.invite() as dialog:  # INVITE
         ...
         # BYE

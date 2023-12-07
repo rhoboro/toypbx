@@ -16,18 +16,20 @@ class TestE2E(unittest.TestCase):
             username=username,
             password="",
         )
-        with client.register(expire=0):
-            pass
+        with self.assertRaises(ValueError):
+            with client.register(expires=0):
+                pass
 
         # REGISTER(401)
-        assert len(client.context.response_messages) == 1
+        print(client.context.response_messages)
+        assert len(client.context.response_messages) == 2
         actual = client.context.response_messages[0]
 
         branch = actual.headers["Via"].branch
-        call_id = actual.headers["Call-ID"].value
+        call_id = actual.headers["Call-ID"].call_id
         local_tag = actual.headers["From"].tag
         remote_tag = actual.headers["To"].tag
-        c_seq = actual.headers["CSeq"].value
+        c_seq = actual.headers["CSeq"].c_seq
 
         expected = ResponseMessage.from_raw(
             f"""SIP/2.0 401 Unauthorized
@@ -54,24 +56,24 @@ Content-Length:  0"""
         domain = os.getenv("DOMAIN")
         username = os.getenv("USER_NAME")
         password = os.getenv("PASSWORD", "")
-        expire = 60
+        expires = 60
 
         client = Client(
             domain=domain,
             username=username,
             password=password,
         )
-        with client.register(expire):
+        with client.register(expires):
             pass
 
         # REGISTER(401), REGISTER(200), UNREGISTER(401), UNREGISTER(200)
         assert len(client.context.response_messages) == 4
         actual = client.context.response_messages[1]
         branch = actual.headers["Via"].branch
-        call_id = actual.headers["Call-ID"].value
+        call_id = actual.headers["Call-ID"].call_id
         local_tag = actual.headers["From"].tag
         remote_tag = actual.headers["To"].tag
-        c_seq = actual.headers["CSeq"].value
+        c_seq = actual.headers["CSeq"].c_seq
 
         expected = ResponseMessage.from_raw(
             f"""SIP/2.0 200 OK
@@ -81,8 +83,8 @@ From: "{username}" <sip:{username}@{domain}>;tag={local_tag}
 To: "{username}" <sip:{username}@{domain}>;tag={remote_tag}
 CSeq: {c_seq} REGISTER
 Date: Sun, 10 Sep 2023 11:36:06 GMT
-Contact: <sip:{username}@192.168.0.137:60956;ob>;expires={expire - 1}
-Expires: {expire}
+Contact: <sip:{username}@192.168.0.137:60956;ob>;expires={expires - 1}
+Expires: {expires}
 Server: Asterisk PBX 20.4.0
 Content-Length:  0"""
         )

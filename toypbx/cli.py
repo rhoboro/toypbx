@@ -4,25 +4,25 @@ import time
 from toypbx.client import Client
 
 
-def register(domain: str, username: str, password: str, expire: int, **kwargs) -> None:
+def register(domain: str, username: str, password: str, expires: int, **kwargs) -> None:
     client = Client(
         domain=domain,
         username=username,
         password=password,
     )
-    with client.register(expire=expire):
-        time.sleep(expire - 1)
+    with client.register(expires=expires):
+        time.sleep(expires - 1)
 
 
-def invite(domain: str, username: str, password: str, expire: int, **kwargs) -> None:
+def invite(domain: str, username: str, password: str, expires: int, **kwargs) -> None:
     client = Client(
         domain=domain,
         username=username,
         password=password,
     )
-    with client.register(expire=expire):
+    with client.register(expires=expires):
         with client.invite() as dialog:
-            time.sleep(expire - 1)
+            time.sleep(expires - 1)
 
 
 def command_server(*args, **kwargs):
@@ -61,7 +61,7 @@ def main():
         default="",
     )
     register_parser.add_argument(
-        "--expire",
+        "--expires",
         type=int,
         default=5,
     )
@@ -85,7 +85,7 @@ def main():
         default="",
     )
     invite_parser.add_argument(
-        "--expire",
+        "--expires",
         type=int,
         default=5,
     )

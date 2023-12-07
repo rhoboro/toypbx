@@ -46,35 +46,35 @@ class Headers(dict[str, Header]):
 
 @dataclass(frozen=True)
 class MaxForward(Header):
-    value: int = 70
+    max_forward: int = 70
     name: str = "Max-Forwards"
     lower_name: str = "max_forwards"
 
     def __str__(self) -> str:
-        return f"{self.value}"
+        return f"{self.max_forward}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
-        return cls(value=int(raw))
+        return cls(max_forward=int(raw))
 
 
 @dataclass(frozen=True)
 class ContentLength(Header):
-    value: int = 0
+    content_length: int = 0
     name: str = "Content-Length"
     lower_name: str = "content_length"
 
     def __str__(self) -> str:
-        return f"{self.value}"
+        return f"{self.content_length}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
-        return cls(value=int(raw))
+        return cls(content_length=int(raw))
 
 
 @dataclass(frozen=True)
 class From(Header):
-    value: str
+    from_: str
     tag: str = field(default_factory=lambda: str(uuid.uuid4()))
     display_name: str | None = None
     name: str = "From"
@@ -82,9 +82,9 @@ class From(Header):
 
     def __str__(self) -> str:
         if self.display_name:
-            return f'"{self.display_name}" <{self.value}>;tag={self.tag}'
+            return f'"{self.display_name}" <{self.from_}>;tag={self.tag}'
         else:
-            return f"<{self.value}>;tag={self.tag}"
+            return f"<{self.from_}>;tag={self.tag}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
@@ -96,7 +96,7 @@ class From(Header):
         value, tag = raw.split(";", 1)
         return cls(
             display_name=display_name,
-            value=value.replace("<", "").replace(">", ""),
+            from_=value.replace("<", "").replace(">", ""),
             tag=tag.replace("tag=", ""),
         )
 
@@ -107,7 +107,7 @@ class From(Header):
 
 @dataclass(frozen=True)
 class To(Header):
-    value: str
+    to: str
     tag: str = ""
     display_name: str | None = None
     name: str = "To"
@@ -115,9 +115,9 @@ class To(Header):
 
     def __str__(self) -> str:
         if self.display_name:
-            v = f'"{self.display_name}" <{self.value}>'
+            v = f'"{self.display_name}" <{self.to}>'
         else:
-            v = f"<{self.value}>"
+            v = f"<{self.to}>"
         if self.tag:
             return f"{v};tag={self.tag}"
         else:
@@ -131,28 +131,28 @@ class To(Header):
         else:
             display_name = None
         if ";" in raw:
-            value, tag = raw.split(";", 1)
+            to, tag = raw.split(";", 1)
         else:
-            value, tag = raw, None
+            to, tag = raw, None
         return cls(
             display_name=display_name,
-            value=value.replace("<", "").replace(">", ""),
+            to=to.replace("<", "").replace(">", ""),
             tag=tag.replace("tag=", "") if tag else None,
         )
 
 
 @dataclass(frozen=True)
 class Contact(Header):
-    value: str
+    contact: str
     display_name: str | None = None
     name: str = "Contact"
     lower_name: str = "contact"
 
     def __str__(self) -> str:
         if self.display_name:
-            return f'"{self.display_name}" <{self.value}>'
+            return f'"{self.display_name}" <{self.contact}>'
         else:
-            return f"<{self.value}>"
+            return f"<{self.contact}>"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
@@ -164,22 +164,22 @@ class Contact(Header):
         value = raw
         return cls(
             display_name=display_name,
-            value=value.replace("<", "").replace(">", ""),
+            contact=value.replace("<", "").replace(">", ""),
         )
 
 
 @dataclass(frozen=True)
 class CallID(Header):
-    value: str = field(default_factory=lambda: str(uuid.uuid4()))
+    call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "Call-ID"
     lower_name: str = "call_id"
 
     def __str__(self) -> str:
-        return self.value
+        return self.call_id
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
-        return cls(value=raw)
+        return cls(call_id=raw)
 
     @classmethod
     def gen_call_id(cls) -> str:
@@ -189,23 +189,23 @@ class CallID(Header):
 @dataclass(frozen=True)
 class CSeq(Header):
     method: ClientMethod
-    value: int = field(default_factory=lambda: randint(1, 2 ^ 31 - 1))
+    c_seq: int = field(default_factory=lambda: randint(1, 2 ^ 31 - 1))
     name: str = "CSeq"
     lower_name: str = "cseq"
 
     def __str__(self) -> str:
-        return f"{self.value} {self.method}"
+        return f"{self.c_seq} {self.method}"
 
     def next(self) -> Self:
         return CSeq(
             method=self.method,
-            value=self.value + 1,
+            c_seq=self.c_seq + 1,
         )
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
         value, method = raw.split(" ")
-        return cls(value=int(value), method=ClientMethod[method])
+        return cls(c_seq=int(value), method=ClientMethod[method])
 
     @classmethod
     def gen_c_seq(cls) -> int:
@@ -214,7 +214,7 @@ class CSeq(Header):
 
 @dataclass(frozen=True)
 class Via(Header):
-    value: str
+    via: str
     branch: str = field(default_factory=lambda: "z9hG4bK" + uuid.uuid4().hex)
     rport: str | None = None
     name: str = "Via"
@@ -222,9 +222,9 @@ class Via(Header):
 
     def __str__(self) -> str:
         if self.rport:
-            return f"{self.value};rport={self.rport};branch={self.branch}"
+            return f"{self.via};rport={self.rport};branch={self.branch}"
         else:
-            return f"{self.value};rport;branch={self.branch}"
+            return f"{self.via};rport;branch={self.branch}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
@@ -238,7 +238,7 @@ class Via(Header):
         if not branch.startswith("z9hG4bK"):
             raise ValueError("branch must starts with z9hG4bKPj")
         value = raw.split(";")[0]
-        return cls(value=value, rport=rport, branch=branch)
+        return cls(via=value, rport=rport, branch=branch)
 
     @classmethod
     def gen_branch(cls) -> str:
@@ -334,16 +334,16 @@ class Authorization(Header):
 
 @dataclass(frozen=True)
 class Expires(Header):
-    value: int
+    expires: int
     name: str = "Expires"
     lower_name: str = "expires"
 
     def __str__(self) -> str:
-        return f"{self.value}"
+        return f"{self.expires}"
 
     @classmethod
     def parse(cls, raw, name: str | None = None) -> Self:
-        return cls(value=int(raw))
+        return cls(expires=int(raw))
 
 
 @dataclass(frozen=True)
