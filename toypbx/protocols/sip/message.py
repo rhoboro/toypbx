@@ -1,8 +1,11 @@
 from dataclasses import dataclass
-from typing import Self, cast
+from typing import TYPE_CHECKING, Self, cast
 
 from .headers import *
 from .methods import ClientMethod
+
+if TYPE_CHECKING:
+    from .context import Transaction
 
 
 @dataclass(frozen=True)
@@ -29,7 +32,7 @@ class ResponseMessage:
     def from_raw(cls, raw_message: str) -> Self:
         headers = Headers()
         lines = raw_message.splitlines()
-        sip_version, status_code, reason_phrase = lines[0].split(" ")
+        sip_version, status_code, reason_phrase = lines[0].split(" ", 2)
         for line in lines[1:]:
             if not line:
                 break
@@ -74,97 +77,15 @@ class RequestMessage:
             lines.append(body_line)
         return "\n".join(lines)
 
-    def digest(self, response: ResponseMessage) -> Self | None:
-        return None
-
-
-@dataclass()
-class RegisterMessage(RequestMessage):
-    username: str
-    _password: str
-
-    def has_password(self) -> bool:
-        return bool(self._password)
-
-    @classmethod
-    def create(
-        cls,
-        domain: str,
-        username: str,
-        password: str = "",
-        expires: int = 300,
-        call_id: str | None = None,
-        c_seq: int | None = None,
-        local_tag: str | None = None,
-        remote_tag: str | None = None,
-        branch: str | None = None,
-    ) -> Self:
-        if call_id:
-            call_id_ = CallID(call_id)
-        else:
-            call_id_ = CallID()
-
-        if c_seq:
-            c_seq_ = CSeq(method=ClientMethod.REGISTER, c_seq=c_seq)
-        else:
-            c_seq_ = CSeq(method=ClientMethod.REGISTER)
-
-        if local_tag:
-            from_ = From(
-                display_name=username, from_=f"sip:{username}@{domain}", tag=local_tag
-            )
-        else:
-            from_ = From(display_name=username, from_=f"sip:{username}@{domain}")
-
-        if remote_tag:
-            to_ = To(
-                display_name=username, to=f"sip:{username}@{domain}", tag=remote_tag
-            )
-        else:
-            to_ = To(display_name=username, to=f"sip:{username}@{domain}")
-
-        if branch:
-            via_ = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=branch)
-        else:
-            via_ = Via("SIP/2.0/UDP 192.168.0.137:60956")
-
-        request = RegisterMessage(
-            start_line=RequestStartLine(
-                method=ClientMethod.REGISTER,
-                request_uri=f"sip:{domain}",
-            ),
-            headers=Headers(
-                Max_Forwards=MaxForward(max_forward=70),
-                From=from_,
-                To=to_,
-                Call_ID=call_id_,
-                CSeq=c_seq_,
-                Contact=Contact(
-                    display_name=username,
-                    contact=f"sip:{username}@192.168.0.137:60956;ob",
-                ),
-                Expires=Expires(expires=expires),
-                Content_Length=ContentLength(content_length=0),
-                Via=via_,
-                Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
-            ),
-            body=[],
-            username=username,
-            _password=password,
-        )
-        return request
-
-    def digest(self, response: ResponseMessage) -> RequestMessage | None:
-        www_authenticate = cast(
-            WWWAuthenticate, response.headers.pop(WWWAuthenticate.name)
-        )
+    def digest(self, username: str, password: str, response: ResponseMessage) -> Self | None:
+        www_authenticate = cast(WWWAuthenticate, response.headers.pop(WWWAuthenticate.name))
 
         headers = Headers(**self.headers)
         headers[CSeq.name] = cast(CSeq, headers[CSeq.name]).next()
         headers[Authorization.name] = Authorization(
-            username=self.username,
-            password=self._password,
-            method=ClientMethod.REGISTER,
+            username=username,
+            password=password,
+            method=response.headers["CSeq"].method,
             request_uri=self.start_line.request_uri,
             realm=www_authenticate.realm,
             nonce=www_authenticate.nonce,
@@ -175,3 +96,222 @@ class RegisterMessage(RequestMessage):
         )
         req = RequestMessage(start_line=self.start_line, headers=headers, body=[])
         return req
+
+
+@dataclass()
+class RegisterMessage(RequestMessage):
+    @classmethod
+    def create(
+        cls,
+        domain: str,
+        username: str,
+        transaction: "Transaction",
+        expires: int = 300,
+    ) -> Self:
+        call_id_ = CallID(transaction.call_id)
+        c_seq = CSeq(method=ClientMethod.REGISTER, c_seq=transaction.next_local_c_seq)
+        from_ = From(
+            display_name=username,
+            from_=f"sip:{username}@{domain}",
+            tag=transaction.local_tag,
+        )
+        if transaction.remote_tag:
+            to = To(
+                display_name=username,
+                to=f"sip:{username}@{domain}",
+                tag=transaction.remote_tag,
+            )
+        else:
+            to = To(display_name=username, to=f"sip:{username}@{domain}")
+        via = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=transaction.branch)
+
+        request = cls(
+            start_line=RequestStartLine(
+                method=ClientMethod.REGISTER,
+                request_uri=f"sip:{domain}",
+            ),
+            headers=Headers(
+                Max_Forwards=MaxForward(max_forward=70),
+                From=from_,
+                To=to,
+                Call_ID=call_id_,
+                CSeq=c_seq,
+                Contact=Contact(
+                    display_name=username,
+                    contact=f"sip:{username}@192.168.0.137:60956;ob",
+                ),
+                Expires=Expires(expires=expires),
+                Content_Length=ContentLength(content_length=0),
+                Via=via,
+                Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
+            ),
+            body=[],
+        )
+        return request
+
+
+@dataclass()
+class UnRegisterMessage(RequestMessage):
+    @classmethod
+    def create(
+        cls,
+        domain: str,
+        username: str,
+        transaction: "Transaction",
+    ) -> Self:
+        return RegisterMessage.create(
+            domain=domain, username=username, transaction=transaction, expires=0
+        )
+
+
+@dataclass()
+class InviteMessage(RequestMessage):
+    @classmethod
+    def create(
+        cls,
+        target: str,
+        domain: str,
+        username: str,
+        transaction: "Transaction",
+    ) -> Self:
+        call_id = CallID(transaction.call_id)
+        c_seq = CSeq(method=ClientMethod.INVITE, c_seq=transaction.next_local_c_seq)
+        from_ = From(
+            display_name=username,
+            from_=f"sip:{username}@{domain}",
+            tag=transaction.local_tag,
+        )
+        if transaction.remote_tag:
+            to = To(to=f"sip:{target}@{domain}", tag=transaction.remote_tag)
+        else:
+            to = To(to=f"sip:{target}@{domain}")
+        via = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=transaction.branch)
+
+        request = cls(
+            start_line=RequestStartLine(
+                method=ClientMethod.INVITE,
+                request_uri=f"sip:{target}@{domain}",
+            ),
+            headers=Headers(
+                Max_Forwards=MaxForward(max_forward=70),
+                From=from_,
+                To=to,
+                Call_ID=call_id,
+                CSeq=c_seq,
+                Contact=Contact(
+                    display_name=username,
+                    contact=f"sip:{username}@192.168.0.137:60956;ob",
+                ),
+                Content_Length=ContentLength(content_length=479),
+                Via=via,
+                Allow="PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, INFO, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS",
+            ),
+            body=[
+                "v=0",
+                "o=- 3910726507 3910726507 IN IP4 192.168.0.137",
+                "s=pjmedia",
+                "b=AS:117",
+                "t=0 0",
+                "a=X-nat:0",
+                "m=audio 4000 RTP/AVP 96 9 8 0 101 102",
+                "c=IN IP4 192.168.0.137",
+                "b=TIAS:96000",
+                "a=rtcp:4001 IN IP4 192.168.0.137",
+                "a=sendrecv",
+                "a=rtpmap:96 opus/48000/2",
+                "a=fmtp:96 useinbandfec=1",
+                "a=rtpmap:9 G722/8000",
+                "a=rtpmap:8 PCMA/8000",
+                "a=rtpmap:0 PCMU/8000",
+                "a=rtpmap:101 telephone-event/48000",
+                "a=fmtp:101 0-16",
+                "a=rtpmap:102 telephone-event/8000",
+                "a=fmtp:102 0-16",
+                "a=ssrc:402436570 cname:7791e39e0af6d766",
+            ],
+        )
+        return request
+
+
+@dataclass()
+class AckMessage(RequestMessage):
+    @classmethod
+    def create(
+        cls,
+        target: str,
+        domain: str,
+        username: str,
+        transaction: "Transaction",
+    ) -> Self:
+        call_id = CallID(transaction.call_id)
+        c_seq = CSeq(method=ClientMethod.ACK, c_seq=transaction.next_local_c_seq)
+        from_ = From(
+            display_name=username,
+            from_=f"sip:{username}@{domain}",
+            tag=transaction.local_tag,
+        )
+        if transaction.remote_tag:
+            to = To(to=f"sip:{target}@{domain}", tag=transaction.remote_tag)
+        else:
+            to = To(to=f"sip:{target}@{domain}")
+        via = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=transaction.branch)
+
+        request = cls(
+            start_line=RequestStartLine(
+                method=ClientMethod.ACK,
+                request_uri=f"sip:{target}@{domain}",
+            ),
+            headers=Headers(
+                Max_Forwards=MaxForward(max_forward=70),
+                From=from_,
+                To=to,
+                Call_ID=call_id,
+                CSeq=c_seq,
+                Content_Length=ContentLength(content_length=0),
+                Via=via,
+            ),
+            body=[],
+        )
+        return request
+
+
+@dataclass()
+class ByeMessage(RequestMessage):
+    @classmethod
+    def create(
+        cls,
+        target: str,
+        domain: str,
+        username: str,
+        transaction: "Transaction",
+    ) -> Self:
+        call_id = CallID(transaction.call_id)
+        c_seq = CSeq(method=ClientMethod.BYE, c_seq=transaction.next_local_c_seq)
+        from_ = From(
+            display_name=username,
+            from_=f"sip:{username}@{domain}",
+            tag=transaction.local_tag,
+        )
+        if transaction.remote_tag:
+            to = To(to=f"sip:{target}@{domain}", tag=transaction.remote_tag)
+        else:
+            to = To(to=f"sip:{target}@{domain}")
+        via = Via("SIP/2.0/UDP 192.168.0.137:60956", branch=transaction.branch)
+
+        request = cls(
+            start_line=RequestStartLine(
+                method=ClientMethod.BYE,
+                request_uri=f"sip:{target}@{domain}",
+            ),
+            headers=Headers(
+                Max_Forwards=MaxForward(max_forward=70),
+                From=from_,
+                To=to,
+                Call_ID=call_id,
+                CSeq=c_seq,
+                Content_Length=ContentLength(content_length=0),
+                Via=via,
+            ),
+            body=[],
+        )
+        return request

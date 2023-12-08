@@ -2,10 +2,11 @@ from dataclasses import dataclass, field
 
 from .headers import *
 from .message import RequestMessage, ResponseMessage
+from .methods import ClientMethod
 
 
 @dataclass
-class Context:
+class Transaction:
     local_tag: str = field(default_factory=From.gen_tag)
     branch: str = field(default_factory=Via.gen_branch)
     call_id: str = field(default_factory=CallID.gen_call_id)
@@ -38,3 +39,34 @@ class Context:
     @property
     def last_response(self) -> ResponseMessage | None:
         return self.response_messages[-1] if self.response_messages else None
+
+
+@dataclass
+class Dialog:
+    transactions: list[Transaction] = field(default_factory=list)
+
+
+@dataclass
+class MultiMediaSession:
+    ...
+
+
+@dataclass
+class Context:
+    domain: str
+    username: str
+    password: str
+    register_transaction: Transaction = None
+    dialogs: list[Dialog] = field(default_factory=list)
+
+    def add_request(self, request: RequestMessage) -> None:
+        if request.start_line.method == ClientMethod.REGISTER:
+            self.register_transaction.add_request(request)
+        else:
+            self.dialogs[-1].transactions[-1].add_request(request)
+
+    def add_response(self, response: ResponseMessage) -> None:
+        if response.method == ClientMethod.REGISTER:
+            self.register_transaction.response_messages.append(response)
+        else:
+            self.dialogs[-1].transactions[-1].add_response(response)
